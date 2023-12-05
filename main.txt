@@ -1,0 +1,390 @@
+#!/usr/bin/env python
+# -*- coding: shift_jis -*-
+#ウィンドウを作成します
+#選択したアイテムをレギオン化します
+import maya.cmds as mc
+import random
+
+class main():
+	def __init__(self):
+		'インスタンスと同じようなもののはず'
+		global legionAokiDict
+		global oldLegionAokiDict
+	
+		
+	def createUI(self, *args):
+		global legionAokiDict
+		legionAokiDict = {}
+		
+		global oldLegionAokiDict
+		oldLegionAokiDict = {}
+		
+		if mc.window('chaosManasiment', q=True, ex=True) == True:
+			mc.deleteUI('chaosManasiment')
+		
+		mc.window('chaosManasiment')
+		mc.tabLayout('mainTab', p='chaosManasiment', changeCommand=self.windowResize)
+		
+		#作成のメインレイアウトを行います
+		mc.paneLayout('createPage', p='mainTab', configuration='horizontal2')
+		
+		#
+		mc.frameLayout('createFrame', p='createPage', label='creatChaos')
+		mc.textFieldGrp('nammingText', p='createFrame', text='legion_1', label='name')		
+		mc.setParent('createFrame')
+		
+		#
+		mc.button('createButton', p='createPage', l='create', c=self.integrateShadow)
+		mc.setParent('createPage')
+		
+		#コントロールのメインパンレイアウトを行います
+		mc.paneLayout('ctrlPage', p='mainTab', configuration='horizontal2')		
+		
+		#作成したリストを制御します
+		mc.paneLayout('listOfChaosPane', p='ctrlPage', configuration='vertical2')		
+		mc.frameLayout('legionListFrame', p='listOfChaosPane', l='legion')
+		mc.textScrollList('legionScrollList', p='legionListFrame', selectCommand=self.replaceShadowList)
+		mc.setParent('legionListFrame')		
+		mc.frameLayout('shadowListFrame', p='listOfChaosPane', l='shadow')
+		mc.textScrollList('shadowScrollList', p='shadowListFrame', selectCommand=self.replacement)		
+		mc.setParent('shadowListFrame')		
+		mc.setParent('listOfChaosPane')
+		
+		#
+		mc.paneLayout('menberCtrlPane', p='ctrlPage', configuration='quad')
+		mc.button('refreshButton', p='menberCtrlPane', l='refresh', c=self.refleshLegionList)	
+		mc.button('listInButton', p='menberCtrlPane', l='list in', c=self.addAndReplace)
+		mc.button('listOutButton', p='menberCtrlPane', l='list out', c=self.trashShapes)
+		mc.button('destroyButton', p='menberCtrlPane', l='destroy', c=self.destroy)	
+		mc.setParent('menberCtrlPane')	
+				
+		mc.setParent('ctrlPage')
+		
+		mc.setParent('mainTab')
+		mc.showWindow('chaosManasiment')
+		
+		if mc.objExists('limbo') == False:
+			mc.group(n='limbo', world=True, empty=True)
+			
+		mc.setAttr('limbo.visibility', 0)
+	
+	
+	#ウィンドウをリサイズ
+	def windowResize(self, *args):
+		#選択されているタブを確認して、ウィンドウをリサイズ
+		if mc.tabLayout('mainTab', q=True, selectTab=True) == 'createPage':
+			mc.window('chaosManasiment', e=True, w=120, h=80)
+		else:
+			mc.window('chaosManasiment', e=True, w=120, h=250)
+			mc.paneLayout('ctrlPage', e=True, ps=[1,100,80])
+	
+	
+	
+	#選択中のオブジェクトの状態が正しい状態になっているかどうかを調べます
+	def checkAndSort(self, selItems, *args):
+		sortList = ['0','0','0']
+		
+		#一つ以上の選択がなされているか調べます
+		if len(selItems) >0:
+			sortList[0] =  '1'
+		else:
+			sortList[0] =  '0'
+		#二つ以上の選択がなされているか調べます
+		if len(selItems) >1:
+			sortList[1] =  '1'
+		else:
+			sortList[1] =  '0'
+		#選択中のアイテムが複数のシェイプを持っていないか調べます
+		
+		if selItems != None and selItems != [] and selItems != '':
+			for i in selItems:
+				haveShadows = mc.listRelatives(i, children=True, shapes=True)				
+				
+				if len(haveShadows) == 1:
+					if sortList[2] != '1':
+						sortList[2] = '1'
+				else:
+					sortList[2] = '0'	
+		
+		return sortList
+	
+	
+	
+	#取得したアイテムを辞書へ書き込み、リストをリプレイスします
+	def reWriteDict(self, soulTaker, getCtrlName, *args):
+		#辞書を宣言します
+		global legionAokiDict
+		global oldLegionAokiDict
+		
+		#ショートネームを取得します
+		shadowList = []
+		for i in soulTaker:
+			rip = i.split('|')
+			shadowList.append(rip[-1])
+		
+		shadowList.append('random')
+		
+		
+		#辞書を作成します
+		legionAokiDict[getCtrlName] = shadowList
+		
+		#レギオンリストのアイテムを書き直します
+		#レギオンリストのアイテムをすべてリムーブします
+		mc.textScrollList('legionScrollList', e=True, removeAll=True)
+		mc.textScrollList('shadowScrollList', e=True, removeAll=True)
+		
+		#レギオンリストのアイテムを書き直します
+		reWriteItems = legionAokiDict.keys()
+		for i in reWriteItems:
+			mc.textScrollList('legionScrollList', e=True, append=i)
+	
+	
+	
+	#取得したオブジェクトのシェイプを悪魔合体
+	def integrateShadow(self, *args):
+		#辞書を宣言します
+		global legionAokiDict
+		
+		selItems = mc.ls(sl=True, long=True)
+		getShadowCheckList = self.checkAndSort(selItems)
+		#"print  getShadowList
+		#print getShadowList
+		if getShadowCheckList[0] == '1' and getShadowCheckList[1] == '1' and getShadowCheckList[2] == '1':
+			
+			
+			print 'すべての生贄は適正でした'
+			print '悪魔合体を実行します'
+			#名前を取得します
+			name = mc.textFieldGrp('nammingText', q=True, text=True)			
+			
+			#レギオンを作成するトランスフォームノードを取得します
+			getOliginName = mc.group( n=name, world=True, empty=True)
+			
+			#シェイプノードを取得します
+			soulTaker = mc.listRelatives(selItems, children=True, shapes=True, fullPath=True)	
+			
+			#悪魔合体
+			lgn = mc.parent(soulTaker, getOliginName, shape=True, add=True)
+						
+			#レギオンをコントロールするグローバルノードを取得します
+			getCtrlName = mc.group( n=('lgn_' + name), world=True, empty=True)
+			#コントロールグループに作成したレギオンを格納します
+			mc.parent(getOliginName, getCtrlName)
+			
+			#オリジナルノードをキープするグループを作成します
+			getOldName = mc.group( n=('lgnOld_' + name), world=True, empty=True)
+			#取得した生贄をペアレントして、リンボに投げ込みます
+			mc.parent(selItems, getOldName)
+			mc.parent(getOldName, 'limbo')
+			
+			
+			self.reWriteDict(soulTaker, getCtrlName)	
+	
+		#フラグチェックエラーパターン	
+		elif getShadowCheckList[0] == '1' and getShadowCheckList[1] == '1' and getShadowCheckList[2] == '0':
+			print '二つ以上シェイプを保持している生贄を選択しています'
+			
+		elif getShadowCheckList[0] == '1' and getShadowCheckList[1] == '0' and getShadowCheckList[2] == '1':
+			print '生贄の数が足りていません'
+		
+		elif getShadowCheckList[0] == '0' and getShadowCheckList[1] == '0' and getShadowCheckList[2] == '1':
+			print '素材が選定されていません'
+
+	
+	#選択したレギオンが所持しているシャドウをリストします
+	def replaceShadowList(self, *args):
+		global legionAokiDict		
+		
+		#現在書き込まれているシャドウリストを削除します
+		mc.textScrollList('shadowScrollList', e=True, removeAll=True)
+		
+		#選択している目次を取得します
+		selectHeadLine = mc.textScrollList('legionScrollList', q=True, selectItem=True)
+		
+		#リプレイスするべきアイテムリストを辞書の中から取得し書き込みます
+		if legionAokiDict != {}:
+			contents = legionAokiDict[ selectHeadLine[0] ]
+			for i in contents:
+				mc.textScrollList('shadowScrollList', e=True, append=i)
+	
+	
+	#レギオングループの読み直しを行います
+	def refleshLegionList(self, *args):
+		global legionAokiDict
+		
+		#リンボの中身を収集します
+		legions = mc.ls('lgn_*')
+		
+		#リンボの中身が持っている使用済みのgrpノードの子供を取得してまとめて辞書化
+		if len(legions) > 0:
+			for i in legions:
+				selItems = []
+				rip = i.split('_')
+				rip[0] = 'lgnOld'
+				oldGrp = '_'.join(rip)
+				
+				getOldObjs = mc.listRelatives(oldGrp, children=True, fullPath=True)
+				soulTaker = mc.listRelatives(getOldObjs, children=True, shapes=True, fullPath=True)
+				
+				getCtrlName = i
+				self.reWriteDict(soulTaker, getCtrlName)
+	
+	
+	#レギオンを破壊します
+	def destroy(self, *args):
+		global legionAokiDict
+		
+		selectHeadLine = mc.textScrollList('legionScrollList', q=True, selectItem=True)
+		
+		mc.delete(selectHeadLine[0])
+		del legionAokiDict[selectHeadLine[0]]
+		
+		
+		#レギオンリストをリフレッシュします
+		mc.textScrollList('legionScrollList', e=True, removeAll=True)
+		mc.textScrollList('shadowScrollList', e=True, removeAll=True)
+		
+		#レギオンリストのアイテムを書き直します
+		reWriteItems = legionAokiDict.keys()
+		for i in reWriteItems:
+			mc.textScrollList('legionScrollList', e=True, append=i)		
+			
+	
+	#選択されているアイテムを判別してシェイプの表示非表示を行います	
+	def replacement(self, *args):
+		global legionAokiDict
+		#現在選択しているレギオングループを取得します
+		selectHeadLine = mc.textScrollList('legionScrollList', q=True, selectItem=True)
+		
+		#グループのobjをすべて取得します
+		getAllobjs =[]
+		selectItems = mc.ls(sl=True, long=True)
+		if len(selectItems) > 0:
+			getAllobjs = selectItems
+		else:
+			getAllobjs = mc.listRelatives(selectHeadLine[0], children=True, fullPath=True)
+		
+		#現在選択されているシェイプを取得します
+		getSelectItems = mc.textScrollList('shadowScrollList', q=True, selectItem=True)
+		
+		#保有するすべてのシェイプを取得します
+		allShapes = mc.textScrollList('shadowScrollList', q=True, allItems=True)
+		allShapes.remove('random')
+		
+		#表示非表示をコントロールします
+		if getSelectItems[0] != 'random':
+			onShape = getSelectItems[0]
+			for i in getAllobjs:
+				getObjs = i
+				self.shapeOnOff(getObjs, onShape)
+		else:
+			for i in getAllobjs:
+				getObjs = i
+				onShape = random.choice(allShapes)
+				#print onShape
+				self.shapeOnOff(getObjs, onShape)
+
+	
+	
+	
+	#選択したシェイプとオブジェクトのシェイプを比較してヒットしたら表示
+	def shapeOnOff(self, getObjs, onShape, *args):
+		shapes = mc.listRelatives(getObjs, children=True, fullPath=True, shapes=True)
+		#print shapes
+		if len(shapes)>0:
+			for e in shapes:
+				rip = e.split('|')
+				
+				#取得したシェイプが選択項目と一致してなかった場合、非表示
+				if rip[-1] != onShape:
+					mc.setAttr((e + '.visibility'), 0)
+				else:
+					mc.setAttr((e + '.visibility'), 1)
+		else:
+			print '選択したレギオングループに存在していない奴を選択しています'
+	
+	
+	
+	
+	
+	#選択したグループに選択したアイテムのシェイプを保有させます
+	def addAndReplace(self, *args):
+		
+		selObj = mc.ls(sl=True, long=True)
+		selItems = selObj
+		addShape = mc.listRelatives(selItems, children=True, shapes=True, fullPath=True)	
+		
+		getShadowCheckList = self.checkAndSort(selItems)
+		#print getShadowCheckList
+		#一つ以上のアイテムを選択していてそれらが一つ以上のシェイプを保有していない場合
+		if getShadowCheckList[0] == '1' and getShadowCheckList[2] == '1':
+		
+			#スクロールリストを取得します
+			#現在選択しているレギオングループを取得します
+			selectHeadLine = mc.textScrollList('legionScrollList', q=True, selectItem=True)
+			if selectHeadLine == None:
+				print '追加するべきレギオンを選択してください'
+				
+			else:			
+				#保有するすべてのシェイプを取得します
+				allShapes = mc.textScrollList('shadowScrollList', q=True, allItems=True)
+				allShapes.remove('random')
+				
+				
+				#すべてのグループ化のobjに悪魔合体をします
+				allLegions = mc.listRelatives(selectHeadLine[0], children=True, fullPath=True)
+				for i in allLegions:
+					mc.parent(addShape, i, shape=True, add=True)
+				
+				#追加したシェイプをoldグループに投げ込みます
+				rip = selectHeadLine[0].split('_')
+				rip[0] = 'lgnOld'
+				oldGrp = '_'.join(rip)				
+				mc.parent(selObj, oldGrp)
+				
+				
+				#シェイプリストに新しいシェイプを追加して辞書とリスト書き換え 
+				soulTaker = allShapes
+				for i in addShape:
+					rip = i.split('|')
+					soulTaker.append(rip[-1])
+				#
+				getCtrlName = selectHeadLine[0]
+				
+				self.reWriteDict(soulTaker, getCtrlName)
+				
+				mc.select(clear=True)				
+		else:
+			print 'それらの追加は認められませんでした。'
+		
+		
+	#シェイプを破棄します
+	def trashShapes(self, *args):
+		global legionAokiDict
+		#選択を取得します
+		selectHeadLine = mc.textScrollList('legionScrollList', q=True, selectItem=True)
+		selectDelItems = mc.textScrollList('shadowScrollList', q=True, selectItem=True)
+		
+		#選択レギオンをすべてリスト
+		allObjs = mc.listRelatives(selectHeadLine[0], children=True, fullPath=True)
+		for i in allObjs:
+			mc.delete(i + '|' + selectDelItems[0])
+		
+		#辞書の中身をリストして、底からアイテムをリムーブして、再リスト
+		contents = legionAokiDict[selectHeadLine[0]]
+		contents.remove(selectDelItems[0])
+		
+		legionAokiDict[selectHeadLine[0]] = contents
+		
+		
+		#シャドウリストをリフレッシュします
+		mc.textScrollList('shadowScrollList', e=True, removeAll=True)
+		for i in contents:
+			mc.textScrollList('shadowScrollList', e=True, append=i)
+				
+	
+main().createUI()
+main().windowResize()
+
+main().refleshLegionList()
+
